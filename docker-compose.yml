@@ -1,0 +1,10 @@
+version: '3'
+services:
+  web:
+    build:
+      context: .
+    volumes:
+      - .:/boxee
+    ports:
+      - "80:80"
+      - "8000:8000"
