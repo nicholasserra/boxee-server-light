@@ -81,6 +81,38 @@ def login():
     return Response(xml, mimetype='text/xml')
 
 
+@app.route('/api/get_featured', subdomain='app')
+@app.route('/api/get_featured', subdomain='api')
+def featured():
+    messages = []
+    for x in range(1, 6):
+        messages.append("""
+        <message type="featured" score="0" referral="{}" source="boxee">
+            <timestamp>{}</timestamp>
+            <description>[B][/B]</description>
+            <object type="stream_video" id="stv_{}">
+                <name>[B][/B]</name>
+                <url></url>
+                <thumb>http://public-nicholasserra.s3.amazonaws.com/web/boxee/boxee-bg-{}.png</thumb>
+                <description></description>
+            </object>
+            <object type="user" id="nicholasserra">
+                <name>nicholasserra</name>
+                <short_name>nicholasserra</short_name>
+                <thumb>http://public-nicholasserra.s3.amazonaws.com/web/boxeeskull200.png</thumb>
+                <thumb_small>http://public-nicholasserra.s3.amazonaws.com/web/boxeeskull78.png</thumb_small>
+                <user_id>nicholasserra</user_id>
+                <user_display_name>nicholasserra</user_display_name>
+                <user_first_name>Nicholas</user_first_name>
+                <user_last_name>Serra</user_last_name>
+                <show_movie_library>0</show_movie_library>
+            </object>
+        </message>
+        """.format(x, int(time.time()), x, x))
+    xml = """<?xml version="1.0" encoding="UTF-8"?><boxeefeed><timestamp>{}</timestamp><last>40</last>{}</boxeefeed>""".format(int(time.time()), ''.join(messages))
+    return Response(xml, mimetype='text/xml')
+
+
 @app.route('/chkupd/dlink.dsm380/<string:one>/<string:two>/<string:three>/<string:four>/<string:five>/<string:six>', subdomain='app')
 @app.route('/chkupd/dlink.dsm380/<string:one>/<string:two>/<string:three>/<string:four>/<string:five>/<string:six>', subdomain='api')
 @app.route('/ping/dlink.dsm380/<string:one>/<string:two>/<string:three>', subdomain='app')
