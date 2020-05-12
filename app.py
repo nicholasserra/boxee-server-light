@@ -16,7 +16,8 @@ app = Flask(__name__)
 app.subdomain_matching = True
 app.config['SERVER_NAME'] = 'boxee.tv'
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'apps')
+APPS_FOLDER = os.path.join(os.path.dirname(__file__), 'apps')
+UPGRADE_FOLDER = os.path.join(os.path.dirname(__file__), 'version', '1.5.1.23735')
 
 
 """
@@ -86,9 +87,8 @@ def login():
 @app.route('/ping/dlink.dsm380/<string:one>/<string:two>/<string:three>', subdomain='app')
 @app.route('/ping/dlink.dsm380/<string:one>/<string:two>/<string:three>', subdomain='api')
 def chkupd_ping(*args, **kwargs):
-    p = request.args.get('p')
     t = int(time.time())
-    xml = "<?xml version='1.0' encoding='ISO-8859-1' ?><ping><cmds ping_version='{}'></cmds><timestamp utc='{}' /></ping>".format(p, t)
+    xml = "<?xml version='1.0' encoding='ISO-8859-1' ?><ping><cmds ping_version='1.2.3.20490'></cmds><timestamp utc='{}' /><version_update build-num='1.5.1.23735' update-descriptor-path='dl.boxee.tv/version/dlink.dsm380/1.5.1.23735/boxee.iso' update-descriptor-hash='a7be254904a55ea7d87ba3a5c9633952' /></ping>".format(t)
     return Response(xml, mimetype='text/xml')
 
 
@@ -121,4 +121,10 @@ def applications():
 # TODO dynamic file names
 @app.route('/apps/download/nrd-1.1-dlink.dsm380.zip/', subdomain='dir')
 def netflix():
-    return send_from_directory(UPLOAD_FOLDER, 'nrd-1.1-dlink.dsm380.zip', as_attachment=True, attachment_filename='nrd-1.1-dlink.dsm380.zip')
+    return send_from_directory(APPS_FOLDER, 'nrd-1.1-dlink.dsm380.zip', as_attachment=True, attachment_filename='nrd-1.1-dlink.dsm380.zip')
+
+
+# TODO dynamic file names
+@app.route('/version/dlink.dsm380/1.5.1.23735/boxee.iso', subdomain='dl')
+def upgrade():
+    return send_from_directory(UPGRADE_FOLDER, 'boxee.iso', as_attachment=True, attachment_filename='boxee.iso')
