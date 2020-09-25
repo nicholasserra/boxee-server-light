@@ -32,6 +32,12 @@ def page_not_found(e):
     return Response('404', status=404, mimetype='text/html')
 
 
+@app.route('/', subdomain='app')
+@app.route('/', subdomain='api')
+def status():
+    return Response('OK {}'.format(int(time.time())), mimetype='text/plain')
+
+
 @app.route('/', subdomain='0.ping')
 @app.route('/', subdomain='1.ping')
 @app.route('/', subdomain='2.ping')
