@@ -1,2 +1,5 @@
 flask==1.1.2
 uwsgi==2.0.19.1
+psycopg2
+Flask-SQLAlchemy===2.4.1
+pytz

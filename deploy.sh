@@ -68,7 +68,7 @@ register_task_definition() {
 }
 
 web_task_definition_json() {
-    if [ $# != 6 ] ; then
+    if [ $# != 9 ] ; then
         echo "Required arguments missing."
         exit 1;
     fi
@@ -79,6 +79,9 @@ web_task_definition_json() {
     local log_stream_prefix=${4}
     local memory=${5}
     local aws_account_id=${6}
+    local database_url=${7}
+    local stats_user=${8}
+    local stats_pass=${9}
 
     local template='[
         {
@@ -100,22 +103,47 @@ web_task_definition_json() {
                     "protocol": "tcp",
                     "containerPort": 80
                 }
+            ],
+            "environment": [
+                {
+                    "name": "ENVIRONMENT",
+                    "value": "production"
+                },
+                {
+                    "name": "TRACK_REQUESTS",
+                    "value": "True"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "%s"
+                },
+                {
+                    "name": "STATS_USER",
+                    "value": "%s"
+                },
+                {
+                    "name": "STATS_PASS",
+                    "value": "%s"
+                }
             ]
         }
     ]'
 
-    echo $(printf "$template" $task_name $aws_account_id $DOCKER_IMAGE_NAME $image_tag $memory $log_group_name $log_stream_prefix)
+    echo $(printf "$template" $task_name $aws_account_id $DOCKER_IMAGE_NAME $image_tag $memory $log_group_name $log_stream_prefix $database_url $stats_user $stats_pass)
 }
 
 deploy_environment() {
-    if [ $# != 3 ] ; then
-        echo "Environment, tag, aws_account_id required."
+    if [ $# != 6 ] ; then
+        echo "Arguments required."
         exit 1;
     fi
 
     local environment=$1
     local tag=$2
     local aws_account_id=$3
+    local database_url=$4
+    local stats_user=$5
+    local stats_pass=$6
 
     # Environment input valid?
     if [[ "$environment" =~ ^(production)$ ]]; then
@@ -142,7 +170,7 @@ deploy_environment() {
     echo "Deploy web" $environment $tag
 
     echo "Build web task definition json for updated image"
-    local web_task_definition_json=$(web_task_definition_json $api_task_definition_name $tag $logs_group $api_logs_stream_prefix $memory $aws_account_id)
+    local web_task_definition_json=$(web_task_definition_json $api_task_definition_name $tag $logs_group $api_logs_stream_prefix $memory $aws_account_id $database_url $stats_user $stats_pass)
 
     echo "Register new web task revision with updated task details"
     local revision_arn=$(register_task_definition "$web_task_definition_json" $api_task_definition_name)

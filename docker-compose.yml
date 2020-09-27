@@ -8,3 +8,17 @@ services:
     ports:
       - "80:80"
       - "8000:8000"
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/boxee
+      - ENVIRONMENT=local
+      - FLASK_ENV=development
+      - TRACK_REQUESTS=False
+      - STATS_USER=test
+      - STATS_PASS=test
+  db:
+    image: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=boxee
+      - POSTGRES_PASSWORD=password

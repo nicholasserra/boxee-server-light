@@ -2,7 +2,13 @@ import logging
 import os
 import time
 
+from datetime import datetime, timedelta
+from functools import wraps
+
+import pytz
+
 from flask import Flask, request, Response, send_from_directory
+from flask_sqlalchemy import SQLAlchemy
 
 
 try:
@@ -14,16 +20,70 @@ except IOError:
 
 app = Flask(__name__)
 app.subdomain_matching = True
-app.config['SERVER_NAME'] = 'boxee.tv'
+
+if os.environ.get('ENVIRONMENT') == 'local':
+    app.config['SERVER_NAME'] = 'boxee.test'
+
+    from werkzeug.debug import DebuggedApplication
+    app.wsgi_app = DebuggedApplication(app.wsgi_app, True)
+    app.debug = True
+else:
+    app.config['SERVER_NAME'] = 'boxee.tv'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# Here because circ dep
+from models import AppRequest
+
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'apps')
 
 
-"""
-from werkzeug.debug import DebuggedApplication
-app.wsgi_app = DebuggedApplication(app.wsgi_app, True)
-app.debug = False
-"""
+def track_request(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if os.environ.get('TRACK_REQUESTS') and os.environ['TRACK_REQUESTS'] == 'True':
+
+            # Figure out real client IP ( because of reverse proxies)
+            trusted_proxies = {'127.0.0.1'}
+            route = request.access_route + [request.remote_addr]
+            remote_addr = next((addr for addr in reversed(route) 
+                                if addr not in trusted_proxies), request.remote_addr)
+
+            existing_row = db.session.query(AppRequest) \
+                .filter_by(ip=remote_addr, endpoint=str(request.url_rule)) \
+                .first()
+
+            now = datetime.utcnow().replace(tzinfo=pytz.utc)
+
+            if existing_row:
+                existing_row.timestamp = now
+            else:
+                new_row = AppRequest(ip=remote_addr, endpoint=str(request.url_rule), timestamp=now)
+                db.session.add(new_row)
+
+            db.session.commit()
+
+        return f(*args, **kwargs)
+    return wrapped
+
+
+def authenticate(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not os.environ.get('STATS_USER') or not os.environ.get('STATS_PASS'):
+            return Response('No', 401, {})
+
+        auth = request.authorization
+        if not auth or not auth.username or not auth.password or \
+            not (auth.username == os.environ['STATS_USER'] and auth.password == os.environ['STATS_PASS']):
+
+            return Response('Login', 401, {'WWW-Authenticate': 'Basic'})
+        return f(*args, **kwargs)
+    return wrapper
 
 
 @app.errorhandler(404)
@@ -32,8 +92,38 @@ def page_not_found(e):
     return Response('404', status=404, mimetype='text/html')
 
 
+@app.route('/stats-all', subdomain='app')
+@authenticate
+def stats_all():
+    response = ''
+    for row in db.session.query(AppRequest).all():
+        response = response + ('{} {} {} {}\n'.format(row.id, row.ip, row.endpoint, row.timestamp))
+    return Response(response, mimetype='text/plain')
+
+
+@app.route('/stats-recent-ips', subdomain='app')
+@authenticate
+def stats_recent_ips():
+    day_ago = datetime.utcnow().replace(tzinfo=pytz.utc) - timedelta(days=1)
+
+    ips = []
+    count = 0
+
+    for row in db.session.query(AppRequest).filter(AppRequest.timestamp >= day_ago):
+        ips.append(row.ip)
+        count += 1
+
+    ips = list(set(ips))
+
+    response = 'Total IPs: {}\n\n'.format(len(ips))
+    response = response + '\n'.join(ips)
+
+    return Response(response, mimetype='text/plain')
+
+
 @app.route('/', subdomain='app')
 @app.route('/', subdomain='api')
+@track_request
 def status():
     return Response('OK {}'.format(int(time.time())), mimetype='text/plain')
 
@@ -48,6 +138,7 @@ def status():
 @app.route('/', subdomain='7.ping')
 @app.route('/', subdomain='8.ping')
 @app.route('/', subdomain='9.ping')
+@track_request
 def ping():
     return Response('pong', mimetype='text/html')
 
@@ -62,6 +153,7 @@ def ping():
 @app.route('/dlink.dsm380/', subdomain='7.ping')
 @app.route('/dlink.dsm380/', subdomain='8.ping')
 @app.route('/dlink.dsm380/', subdomain='9.ping')
+@track_request
 def dlink_ping():
     p = request.args.get('p')
     t = int(time.time())
@@ -71,6 +163,7 @@ def dlink_ping():
 
 @app.route('/api/login', subdomain='app')
 @app.route('/api/login', subdomain='api')
+@track_request
 def login():
     xml = """<?xml version="1.0" encoding="UTF-8" ?><object type="user" id="666">
     <name>Boxee User</name>
@@ -89,6 +182,7 @@ def login():
 
 @app.route('/api/get_featured', subdomain='app')
 @app.route('/api/get_featured', subdomain='api')
+@track_request
 def featured():
     messages = []
     for x in range(1, 6):
@@ -123,6 +217,7 @@ def featured():
 @app.route('/chkupd/dlink.dsm380/<string:one>/<string:two>/<string:three>/<string:four>/<string:five>/<string:six>', subdomain='api')
 @app.route('/ping/dlink.dsm380/<string:one>/<string:two>/<string:three>', subdomain='app')
 @app.route('/ping/dlink.dsm380/<string:one>/<string:two>/<string:three>', subdomain='api')
+@track_request
 def chkupd_ping(*args, **kwargs):
     p = request.args.get('p')
     t = int(time.time())
@@ -132,6 +227,7 @@ def chkupd_ping(*args, **kwargs):
 
 @app.route('/appindex/dlink.dsm380/1.5.1', subdomain='app')
 @app.route('/appindex/dlink.dsm380/1.5.1', subdomain='api')
+@track_request
 def applications():
     xml = """<apps>
     <app>
@@ -158,5 +254,6 @@ def applications():
 
 # TODO dynamic file names
 @app.route('/apps/download/nrd-1.1-dlink.dsm380.zip/', subdomain='dir')
+@track_request
 def netflix():
     return send_from_directory(UPLOAD_FOLDER, 'nrd-1.1-dlink.dsm380.zip', as_attachment=True, attachment_filename='nrd-1.1-dlink.dsm380.zip')
