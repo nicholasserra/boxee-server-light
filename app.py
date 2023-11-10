@@ -17,6 +17,8 @@ except IOError:
     # Testing outside of Docker container?
     pass
 
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'apps')
+TRACK_REQUESTS = bool(os.environ.get('TRACK_REQUESTS') and os.environ['TRACK_REQUESTS'] == "True")
 
 app = Flask(__name__)
 app.subdomain_matching = True
@@ -30,7 +32,7 @@ if os.environ.get('ENVIRONMENT') == 'local':
 else:
     app.config['SERVER_NAME'] = 'boxee.tv'
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', '')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -39,14 +41,10 @@ db = SQLAlchemy(app)
 from models import AppRequest
 
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'apps')
-
-
 def track_request(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
-        if os.environ.get('TRACK_REQUESTS') and os.environ['TRACK_REQUESTS'] == 'True':
-
+        if TRACK_REQUESTS:
             # Figure out real client IP ( because of reverse proxies)
             trusted_proxies = {'127.0.0.1'}
             route = request.access_route + [request.remote_addr]
@@ -95,6 +93,9 @@ def page_not_found(e):
 @app.route('/stats-all', subdomain='app')
 @authenticate
 def stats_all():
+    if not TRACK_REQUESTS:
+        return Response('No', 400, {})
+
     response = ''
     for row in db.session.query(AppRequest).all():
         response = response + ('{} {} {} {}\n'.format(row.id, row.ip, row.endpoint, row.timestamp))
@@ -104,6 +105,9 @@ def stats_all():
 @app.route('/stats-recent-ips', subdomain='app')
 @authenticate
 def stats_recent_ips():
+    if not TRACK_REQUESTS:
+        return Response('No', 400, {})
+
     day_ago = datetime.utcnow().replace(tzinfo=pytz.utc) - timedelta(days=1)
 
     ips = []
