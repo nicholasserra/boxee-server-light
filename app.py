@@ -264,3 +264,10 @@ def applications():
 @track_request
 def netflix():
     return send_from_directory(UPLOAD_FOLDER, 'nrd-1.1-dlink.dsm380.zip', as_attachment=True, attachment_filename='nrd-1.1-dlink.dsm380.zip')
+
+
+@app.route('/api/v1/client/version', subdomain='gateway')
+@track_request
+def dsm382_version():
+    xml = """<?xml version='1.0' encoding='ISO-8859-1' ?><object></object>"""
+    return Response(xml, mimetype='text/xml')
