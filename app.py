@@ -32,13 +32,16 @@ if os.environ.get('ENVIRONMENT') == 'local':
 else:
     app.config['SERVER_NAME'] = 'boxee.tv'
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', '')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', None)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
 
-# Here because circ dep
-from models import AppRequest
+if TRACK_REQUESTS:
+    db = SQLAlchemy(app)
+    # Here because circ dep
+    from models import AppRequest
+else:
+    db = None
 
 
 def track_request(f):
